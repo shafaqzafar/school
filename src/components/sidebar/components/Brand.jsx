@@ -13,7 +13,7 @@ import { MdKeyboardDoubleArrowLeft, MdKeyboardDoubleArrowRight } from "react-ico
 export function SidebarBrand() {
   const { toggleSidebar, setToggleSidebar } = useContext(SidebarContext) || {};
   const isCollapsed = !!toggleSidebar;
-  const logoSrc = `${import.meta.env.BASE_URL}academiapro-Picsart-AiImageEnhancer.png`;
+  const logoSrc = `/academiapro-Picsart-AiImageEnhancer.png`;
   const iconColor = useColorModeValue("gray.500", "gray.300");
   const tooltipLabel = isCollapsed ? "Expand sidebar" : "Collapse sidebar";
   const ToggleIcon = isCollapsed ? MdKeyboardDoubleArrowRight : MdKeyboardDoubleArrowLeft;
