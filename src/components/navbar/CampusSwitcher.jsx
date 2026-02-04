@@ -17,7 +17,6 @@ import { useNavigate } from 'react-router-dom';
 import { MdExpandMore, MdSchool, MdLocationCity } from 'react-icons/md';
 import { campusesApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import defaultLogo from '../../assets/img/logo.png';
 
 export default function CampusSwitcher() {
     const { user, campusId, setCampusId } = useAuth();
@@ -29,26 +28,8 @@ export default function CampusSwitcher() {
     const getCampusImage = (campus) => {
         if (campus?.image) return campus.image;
         
-        // Use different avatars for different campuses based on their ID or name
-        const campusImages = {
-            'main': '/src/assets/img/avatars/avatar1.png',
-            'north': '/src/assets/img/avatars/avatar2.png',
-            'south': '/src/assets/img/avatars/avatar3.png',
-            'east': '/src/assets/img/avatars/avatar4.png',
-            'west': '/src/assets/img/avatars/avatar5.png',
-        };
-        
-        const campusName = campus?.name?.toLowerCase() || '';
-        const campusIdStr = String(campus?.id || '');
-        
-        // Try to match by name first
-        for (const [key, image] of Object.entries(campusImages)) {
-            if (campusName.includes(key)) return image;
-        }
-        
-        // Use ID-based fallback
-        const imageIndex = parseInt(campusIdStr) % 5 + 1;
-        return `/src/assets/img/avatars/avatar${imageIndex}.png`;
+        // Use the academiapro-Picsart image as default for all campuses
+        return '/academiapro-Picsart-AiImageEnhancer.png';
     };
 
     // Colors
@@ -114,12 +95,13 @@ export default function CampusSwitcher() {
             >
                 <Flex alignItems='center'>
                     <Image 
-                        src={defaultLogo} 
+                        src='/academiapro-Picsart-AiImageEnhancer.png' 
                         alt='Campus Logo' 
                         w='24px' 
                         h='24px' 
                         mr='8px' 
                         borderRadius='4px'
+                        objectFit='cover'
                         fallback={<Icon as={MdSchool} color='brand.500' w='18px' h='18px' />}
                     />
                     <Text fontSize='sm' fontWeight='700' color={textColor}>
@@ -157,12 +139,13 @@ export default function CampusSwitcher() {
                 >
                     <Flex alignItems='center' flex='1'>
                         <Image 
-                            src={defaultLogo} 
+                            src='/academiapro-Picsart-AiImageEnhancer.png' 
                             alt='All Campuses' 
                             w='32px' 
                             h='32px' 
                             mr='12px' 
                             borderRadius='6px'
+                            objectFit='cover'
                             fallback={<Icon as={MdSchool} color='brand.500' w='20px' h='20px' mr='12px' />}
                         />
                         <Box>
