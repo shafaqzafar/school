@@ -10,17 +10,46 @@ import {
     useColorModeValue,
     Box,
     Badge,
+    Image,
+    Flex,
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
-import { MdExpandMore, MdSchool } from 'react-icons/md';
+import { MdExpandMore, MdSchool, MdLocationCity } from 'react-icons/md';
 import { campusesApi } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import defaultLogo from '../../assets/img/logo.png';
 
 export default function CampusSwitcher() {
     const { user, campusId, setCampusId } = useAuth();
     const [campuses, setCampuses] = useState([]);
     const [selectedCampus, setSelectedCampus] = useState(null);
     const navigate = useNavigate();
+
+    // Function to get campus image based on campus name or ID
+    const getCampusImage = (campus) => {
+        if (campus?.image) return campus.image;
+        
+        // Use different avatars for different campuses based on their ID or name
+        const campusImages = {
+            'main': '/src/assets/img/avatars/avatar1.png',
+            'north': '/src/assets/img/avatars/avatar2.png',
+            'south': '/src/assets/img/avatars/avatar3.png',
+            'east': '/src/assets/img/avatars/avatar4.png',
+            'west': '/src/assets/img/avatars/avatar5.png',
+        };
+        
+        const campusName = campus?.name?.toLowerCase() || '';
+        const campusIdStr = String(campus?.id || '');
+        
+        // Try to match by name first
+        for (const [key, image] of Object.entries(campusImages)) {
+            if (campusName.includes(key)) return image;
+        }
+        
+        // Use ID-based fallback
+        const imageIndex = parseInt(campusIdStr) % 5 + 1;
+        return `/src/assets/img/avatars/avatar${imageIndex}.png`;
+    };
 
     // Colors
     const menuBg = useColorModeValue('white', 'navy.800');
@@ -83,12 +112,20 @@ export default function CampusSwitcher() {
                 h='40px'
                 mr='10px'
             >
-                <Box display='flex' alignItems='center'>
-                    <Icon as={MdSchool} color='brand.500' mr='8px' w='18px' h='18px' />
+                <Flex alignItems='center'>
+                    <Image 
+                        src={defaultLogo} 
+                        alt='Campus Logo' 
+                        w='24px' 
+                        h='24px' 
+                        mr='8px' 
+                        borderRadius='4px'
+                        fallback={<Icon as={MdSchool} color='brand.500' w='18px' h='18px' />}
+                    />
                     <Text fontSize='sm' fontWeight='700' color={textColor}>
                         {selectedCampus ? selectedCampus.name : 'Select Campus'}
                     </Text>
-                </Box>
+                </Flex>
             </MenuButton>
             <MenuList
                 boxShadow={shadow}
@@ -118,14 +155,25 @@ export default function CampusSwitcher() {
                     bg={(!campusId || String(campusId).toLowerCase() === 'all') ? menuItemActiveBg : 'transparent'}
                     mb='4px'
                 >
-                    <Box>
-                        <Text fontWeight='700' fontSize='sm' color={textColor}>
-                            All
-                        </Text>
-                        <Text fontSize='xs' color='gray.500'>
-                            All Campuses
-                        </Text>
-                    </Box>
+                    <Flex alignItems='center' flex='1'>
+                        <Image 
+                            src={defaultLogo} 
+                            alt='All Campuses' 
+                            w='32px' 
+                            h='32px' 
+                            mr='12px' 
+                            borderRadius='6px'
+                            fallback={<Icon as={MdSchool} color='brand.500' w='20px' h='20px' mr='12px' />}
+                        />
+                        <Box>
+                            <Text fontWeight='700' fontSize='sm' color={textColor}>
+                                All
+                            </Text>
+                            <Text fontSize='xs' color='gray.500'>
+                                All Campuses
+                            </Text>
+                        </Box>
+                    </Flex>
                     {(!campusId || String(campusId).toLowerCase() === 'all') && (
                         <Badge ml='auto' colorScheme='brand' borderRadius='8px'>Active</Badge>
                     )}
@@ -139,14 +187,39 @@ export default function CampusSwitcher() {
                         bg={String(campusId) === String(campus.id) ? menuItemActiveBg : 'transparent'}
                         mb='4px'
                     >
-                        <Box>
-                            <Text fontWeight='700' fontSize='sm' color={textColor}>
-                                {campus.name}
-                            </Text>
-                            <Text fontSize='xs' color='gray.500'>
-                                {campus.city || 'Main Campus'}
-                            </Text>
-                        </Box>
+                        <Flex alignItems='center' flex='1'>
+                            <Image 
+                                src={getCampusImage(campus)} 
+                                alt={campus.name} 
+                                w='32px' 
+                                h='32px' 
+                                mr='12px' 
+                                borderRadius='6px'
+                                objectFit='cover'
+                                fallback={
+                                    <Box 
+                                        w='32px' 
+                                        h='32px' 
+                                        mr='12px' 
+                                        borderRadius='6px' 
+                                        bg='brand.100' 
+                                        display='flex' 
+                                        alignItems='center' 
+                                        justifyContent='center'
+                                    >
+                                        <Icon as={MdLocationCity} color='brand.500' w='20px' h='20px' />
+                                    </Box>
+                                }
+                            />
+                            <Box>
+                                <Text fontWeight='700' fontSize='sm' color={textColor}>
+                                    {campus.name}
+                                </Text>
+                                <Text fontSize='xs' color='gray.500'>
+                                    {campus.city || 'Main Campus'}
+                                </Text>
+                            </Box>
+                        </Flex>
                         {String(campusId) === String(campus.id) && (
                             <Badge ml='auto' colorScheme='brand' borderRadius='8px'>Active</Badge>
                         )}
