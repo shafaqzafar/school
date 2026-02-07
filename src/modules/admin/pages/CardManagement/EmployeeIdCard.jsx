@@ -8,6 +8,7 @@ import { MdAdd, MdPrint, MdDownload, MdVisibility, MdEdit, MdDelete } from 'reac
 import Card from '../../../../components/card/Card';
 import StatCard from '../../../../components/card/StatCard';
 import { employeeApi, idCardTemplateApi, generatedIdCardApi } from '../../../../services/moduleApis';
+import * as campusesApi from '../../../../services/api/campuses';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { config } from '../../../../config/env';
@@ -17,6 +18,7 @@ export default function EmployeeIdCard() {
     const toast = useToast();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [campus, setCampus] = useState(null);
     const [employees, setEmployees] = useState([]);
     const [templates, setTemplates] = useState([]);
     const [generatedCards, setGeneratedCards] = useState([]);
@@ -33,6 +35,27 @@ export default function EmployeeIdCard() {
 
     useEffect(() => {
         fetchData();
+    }, [campusId]);
+
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            try {
+                if (!campusId) {
+                    if (mounted) setCampus(null);
+                    return;
+                }
+                const res = await campusesApi.getById(campusId);
+                if (!mounted) return;
+                setCampus(res || null);
+            } catch (_) {
+                if (!mounted) return;
+                setCampus(null);
+            }
+        })();
+        return () => {
+            mounted = false;
+        };
     }, [campusId]);
 
     const asArray = (data) => {
@@ -58,6 +81,21 @@ export default function EmployeeIdCard() {
             if (!base || base === '/api') return window.location.origin;
             if (base.endsWith('/api')) base = base.slice(0, -4);
             return base || window.location.origin;
+        };
+
+        const extractPlaceholder = (rawField) => {
+            const s = String(rawField || '').trim();
+            const m = /\{\s*([^}]+?)\s*\}/.exec(s);
+            if (!m) return null;
+            return String(m[1] || '').trim().toLowerCase();
+        };
+
+        const displayLabel = (rawField) => {
+            const base = String(rawField || '')
+                .replace(/\{\s*[^}]+\s*\}/g, '')
+                .replace(/\s*[:\-–]\s*$/g, '')
+                .trim();
+            return base || String(rawField || '').trim();
         };
         const assetBase = getAssetBase();
         const normalizeColor = (raw) => {
@@ -116,7 +154,11 @@ export default function EmployeeIdCard() {
         const cardHtml = (c) => {
             const tpl = templates.find((t) => String(t.id) === String(c.templateId));
             const person = employees.find((e) => String(e.id) === String(c.employeeId));
-            const fields = String(tpl?.fields || 'Photo, Name, ID, Designation, Department').split(',').map((f) => f.trim()).filter(Boolean);
+            const fieldsRaw = String(tpl?.fields || 'Photo, Name, ID, Designation, Department');
+            const fields = fieldsRaw
+                .split(/[\n,]+/)
+                .map((f) => String(f || '').trim())
+                .filter(Boolean);
             const bgRaw = tpl?.bgColor || tpl?.bg_color || tpl?.backgroundColor || tpl?.background_color || '#805AD5';
             const bg = normalizeColor(bgRaw) || '#805AD5';
             const rgb = toRgb(bg);
@@ -130,62 +172,102 @@ export default function EmployeeIdCard() {
             const photoUrl = normalizeImageUrl(rawPhotoUrl);
             const displayName = person?.name || c.personName || 'Unknown';
 
+            const instituteName = campus?.name || campus?.campusName || campus?.title || campus?.schoolName || '';
+
             const wantsPhoto = fields.some((f) => {
-                const k = String(f).toLowerCase();
+                const k = extractPlaceholder(f) || String(f).toLowerCase();
                 return k.includes('photo') || k.includes('image') || k.includes('picture');
             });
             const wantsName = fields.some((f) => {
-                const k = String(f).toLowerCase();
+                const k = extractPlaceholder(f) || String(f).toLowerCase();
                 return k === 'name' || k.includes('full name') || k.includes('employee name') || k.includes('staff name');
             });
 
-            const maxFields = wantsPhoto ? 4 : 6;
+            const wantsSignature = fields.some((f) => {
+                const k = extractPlaceholder(f) || String(f).toLowerCase();
+                return k.includes('signature');
+            });
+
+            const maxFields = wantsPhoto ? 8 : 10;
             const displayFields = fields
                 .filter((f) => {
-                    const k = String(f).toLowerCase();
+                    const k = extractPlaceholder(f) || String(f).toLowerCase();
                     return !(k.includes('photo') || k.includes('image') || k.includes('picture') || k === 'name' || k.includes('full name') || k.includes('employee name') || k.includes('staff name'));
                 })
                 .slice(0, maxFields);
 
             const resolveValue = (label) => {
-                const key = String(label || '').toLowerCase();
-                if (key.includes('name')) return displayName;
+                const key = extractPlaceholder(label) || String(label || '').toLowerCase();
+                const normalizedKey = String(key)
+                    .replace(/\s+/g, '_')
+                    .replace(/[^a-z0-9_]/g, '');
+
+                if (normalizedKey === 'institute_name' || normalizedKey === 'school_name' || normalizedKey === 'campus_name') {
+                    return instituteName;
+                }
+                if (normalizedKey === 'logo') return logo;
+                if (normalizedKey === 'staff_photo' || normalizedKey === 'photo' || normalizedKey === 'image' || normalizedKey === 'picture') {
+                    return photoUrl;
+                }
                 if (key === 'id' || key.includes('employee id') || key.includes('emp id') || key.includes('staff id') || key.includes('teacher id')) {
                     return person?.id ?? c.employeeId ?? '';
                 }
                 if (key.includes('cnic')) return person?.cnic ?? person?.cnicNumber ?? person?.cnic_number ?? '';
                 if (key.includes('qualification')) return person?.qualification ?? person?.education ?? '';
                 if (key.includes('subject')) return person?.subject ?? person?.subjects ?? person?.specialization ?? '';
-                if (key.includes('joining') || key.includes('join date')) return person?.joiningDate ?? person?.joinDate ?? person?.joining_date ?? '';
-                if (key.includes('dob') || key.includes('date of birth') || key.includes('birth')) return person?.dateOfBirth ?? person?.dob ?? person?.date_of_birth ?? '';
-                if (key.includes('address')) return person?.address ?? person?.currentAddress ?? person?.current_address ?? '';
+                if (normalizedKey === 'joining_date' || key.includes('joining') || key.includes('join date')) return person?.joiningDate ?? person?.joinDate ?? person?.joining_date ?? '';
+                if (normalizedKey === 'birthday' || key.includes('dob') || key.includes('date of birth') || key.includes('birth')) return person?.dateOfBirth ?? person?.dob ?? person?.date_of_birth ?? person?.birthday ?? '';
+                if (normalizedKey === 'present_address' || key.includes('address')) return person?.presentAddress ?? person?.present_address ?? person?.address ?? person?.currentAddress ?? person?.current_address ?? '';
                 if (key.includes('designation') || key.includes('position') || key.includes('role')) {
                     return person?.designation || person?.position || person?.role || '';
                 }
+                if (normalizedKey === 'gender' || key.includes('gender')) return person?.gender ?? '';
+                if (normalizedKey === 'name' || (key.includes('name') && !key.includes('designation') && !key.includes('department'))) return displayName;
                 if (key.includes('department')) return person?.department || '';
                 if (key.includes('email')) return person?.email || '';
                 if (key.includes('phone') || key.includes('mobile')) return person?.phone || person?.mobile || person?.contact || '';
+                if (normalizedKey === 'signature') return '';
                 return '';
             };
 
             const rows = displayFields
                 .map((f) => {
                     const value = resolveValue(f);
-                    if (String(value || '').trim() === '') return '';
-                    return `<div class="kv"><div class="k">${safe(f)}</div><div class="v">${safe(value)}</div></div>`;
+                    const k = displayLabel(f);
+                    const placeholder = extractPlaceholder(f);
+                    if (placeholder && (placeholder.includes('logo') || placeholder.includes('photo') || placeholder.includes('image') || placeholder.includes('picture'))) {
+                        return '';
+                    }
+                    const finalValue = String(value || '').trim() === '' ? '-' : value;
+                    return `<div class="kv"><div class="k">${safe(k)}</div><div class="v">${safe(finalValue)}</div></div>`;
                 })
                 .filter(Boolean)
                 .join('');
 
             const noPhotoClass = wantsPhoto ? '' : ' no-photo';
 
+            const tallMode = displayFields.length > 3;
+            const oneColMode = displayFields.length > 3;
+            const tallClass = tallMode ? ' tall' : '';
+            const gridClass = oneColMode ? ' onecol' : '';
+
+            const signatureBlock = wantsSignature
+                ? `
+                    <div class="sigWrap">
+                        <div class="sigTitle">Executive Director RDO</div>
+                        <div class="sigLine"></div>
+                        <div class="sigNote">Signature</div>
+                    </div>
+                `
+                : '';
+
             return `
-                <div class="idcard ${layoutClass}${noPhotoClass}" style="--accent:${safe(bg)};--accentSoft:${safe(accentSoft)};--accentMid:${safe(accentMid)}">
+                <div class="idcard ${layoutClass}${noPhotoClass}${tallClass}" style="--accent:${safe(bg)};--accentSoft:${safe(accentSoft)};--accentMid:${safe(accentMid)}">
                     <div class="top">
                         <div class="brand">
                             ${logo ? `<img class="logo" src="${safe(logo)}" />` : `<div class="logoPlaceholder"></div>`}
                             <div class="brandText">
-                                <div class="brandName">${safe(tpl?.name || 'Employee ID Card')}</div>
+                                <div class="brandName">${safe(instituteName || tpl?.name || 'Employee ID Card')}</div>
                                 <div class="brandSub">Staff Identification</div>
                             </div>
                         </div>
@@ -200,12 +282,15 @@ export default function EmployeeIdCard() {
                         ` : ''}
                         <div class="details">
                             ${wantsName ? `<div class="name">${safe(displayName)}</div>` : ''}
-                            <div class="grid">${rows}</div>
+                            <div class="grid${gridClass}">${rows}</div>
                         </div>
                     </div>
                     <div class="bottom">
-                        <div class="meta">ID: <span class="mono">${safe(person?.id ?? c.employeeId ?? '')}</span></div>
-                        <div class="meta">Generated: <span class="mono">${safe(formatDate(c.generatedDate))}</span></div>
+                        <div class="bottomLeft">
+                            <div class="meta">ID: <span class="mono">${safe(person?.id ?? c.employeeId ?? '')}</span></div>
+                            <div class="meta">Generated: <span class="mono">${safe(formatDate(c.generatedDate))}</span></div>
+                        </div>
+                        ${signatureBlock}
                         <div class="status ${String(c.status || '').toLowerCase() === 'printed' ? 'ok' : 'pending'}">${safe(c.status || 'Generated')}</div>
                     </div>
                 </div>
@@ -224,7 +309,8 @@ export default function EmployeeIdCard() {
                     body{margin:0;padding:14px;background:#fff}
                     .sheet{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
                     .sheet.single{justify-content:center;align-items:center;width:100%;min-height:273mm}
-                    .idcard{width:340px;height:215px;border-radius:14px;overflow:hidden;position:relative;background:linear-gradient(160deg,var(--accentSoft),#fff 62%);box-shadow:0 10px 30px rgba(17,24,39,.12);border:1.5px solid rgba(17,24,39,.12)}
+                    .idcard{width:340px;min-height:215px;height:auto;border-radius:14px;overflow:hidden;position:relative;background:linear-gradient(160deg,var(--accentSoft),#fff 62%);box-shadow:0 10px 30px rgba(17,24,39,.12);border:1.5px solid rgba(17,24,39,.12);display:flex;flex-direction:column}
+                    .idcard.tall{min-height:300px}
                     .idcard:before{content:'';position:absolute;inset:-40% -40% auto auto;width:240px;height:240px;background:var(--accentSoft);transform:rotate(25deg)}
                     .top{position:relative;display:flex;justify-content:space-between;align-items:center;padding:14px 14px 10px;background:linear-gradient(135deg,var(--accentMid) 0%, var(--accentMid) 55%, #111827 100%)}
                     .brand{display:flex;align-items:center;gap:10px;color:#fff}
@@ -241,17 +327,25 @@ export default function EmployeeIdCard() {
                     .details{flex:1;min-width:0}
                     .name{font-weight:900;font-size:15px;color:#111827;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
                     .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 10px}
-                    .kv{padding:8px 10px;border-radius:10px;background:rgba(17,24,39,.03);border:1px solid rgba(17,24,39,.06);min-width:0}
-                    .k{font-size:10.5px;color:#4b5563;font-weight:900;text-transform:uppercase;letter-spacing:.35px;margin-bottom:2px}
-                    .v{font-size:12.5px;color:#111827;font-weight:750;line-height:1.15;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-                    .bottom{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.96) 40%,#fff)}
+                    .grid.onecol{grid-template-columns:minmax(0,1fr)}
+                    .kv{padding:7px 9px;border-radius:10px;background:rgba(17,24,39,.03);border:1px solid rgba(17,24,39,.06);min-width:0}
+                    .k{font-size:10px;color:#4b5563;font-weight:900;text-transform:uppercase;letter-spacing:.25px;margin-bottom:2px;white-space:normal;line-height:1.1}
+                    .v{font-size:12px;color:#111827;font-weight:750;line-height:1.15;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;white-space:normal}
+                    .bottom{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:10px 14px;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.96) 40%,#fff)}
+                    .bottomLeft{display:flex;flex-direction:column;gap:2px;min-width:0}
                     .meta{font-size:10.5px;color:#374151}
                     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
                     .status{font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px;border:1px solid rgba(17,24,39,.08);background:#fef3c7;color:#92400e}
                     .status.ok{background:#dcfce7;color:#166534}
                     .status.pending{background:#fef3c7;color:#92400e}
 
-                    .idcard.layout-vertical{width:215px;height:340px}
+                    .sigWrap{width:130px;text-align:center;flex:0 0 auto}
+                    .sigTitle{font-size:9.5px;font-weight:900;color:#111827;margin-bottom:6px}
+                    .sigLine{height:20px;border-bottom:2px solid rgba(17,24,39,.9)}
+                    .sigNote{font-size:9px;color:#4b5563;margin-top:6px;font-weight:800}
+
+                    .idcard.layout-vertical{width:215px;min-height:340px;height:auto}
+                    .idcard.layout-vertical.tall{min-height:420px}
                     .idcard.layout-vertical:before{inset:-45% -55% auto auto;width:240px;height:240px;transform:rotate(35deg)}
                     .idcard.layout-vertical .top{padding:12px 12px 10px}
                     .idcard.layout-vertical .mid{flex-direction:column;align-items:center;gap:10px;padding:12px}

@@ -24,9 +24,9 @@ export default function IdCardTemplate() {
     const getDefaultFields = (typeValue) => {
         const t = String(typeValue || '').toLowerCase();
         if (t === 'employee' || t === 'teacher') {
-            return 'Photo, Name, ID, Designation, Department, Phone, CNIC, Joining Date';
+            return '{institute_name}, {staff_photo}, Name : {name}, {designation}, {gender}, Joining : {joining_date}, DoB : {birthday}, {present_address}, Executive Director RDO : {signature}';
         }
-        return 'Photo, Name, ID, Roll No, Class, Section, Father Name, Phone';
+        return '{institute_name}, {logo}, {student_photo}, Student Name : {name}, Father Name : {father_name}, Register No : {register_no}, DOB : {birthday}, Address : {present_address}, Executive Director RDO : {signature}';
     };
 
     const getDefaultColor = (typeValue) => {
